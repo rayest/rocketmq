@@ -39,8 +39,10 @@ import org.apache.rocketmq.remoting.netty.NettyServerConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.apache.rocketmq.srvutil.ServerUtil;
 import org.apache.rocketmq.srvutil.ShutdownHookThread;
+import org.apache.rocketmq.tools.annotation.Note;
 import org.slf4j.LoggerFactory;
 
+@Note("Name server 模块")
 public class NamesrvStartup {
 
     private static InternalLogger log;
@@ -51,36 +53,31 @@ public class NamesrvStartup {
         main0(args);
     }
 
+    @Note("启动 name server")
     public static NamesrvController main0(String[] args) {
-
         try {
+            // 1. 新建 NamesrvController
             NamesrvController controller = createNamesrvController(args);
+
+            // 2. 启动 name server
             start(controller);
-            String tip = "The Name Server boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
-            log.info(tip);
-            System.out.printf("%s%n", tip);
             return controller;
         } catch (Throwable e) {
             e.printStackTrace();
-            System.exit(-1);
         }
-
         return null;
     }
 
+    @Note("创建 name server controller")
     public static NamesrvController createNamesrvController(String[] args) throws IOException, JoranException {
-        System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
-        //PackageConflictDetect.detectFastjson();
 
-        Options options = ServerUtil.buildCommandlineOptions(new Options());
-        commandLine = ServerUtil.parseCmdLine("mqnamesrv", args, buildCommandlineOptions(options), new PosixParser());
-        if (null == commandLine) {
-            System.exit(-1);
-            return null;
-        }
-
+        // 1. 初始化 name server 配置
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
+
+        // 2. 初始化 netty server 配置
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+
+        // 监听 9876
         nettyServerConfig.setListenPort(9876);
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
@@ -123,9 +120,9 @@ public class NamesrvStartup {
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
 
+        // 3. 根据配置文件初始化 name server controller
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
-        // remember all configs to prevent discard
         controller.getConfiguration().registerConfig(properties);
 
         return controller;
@@ -137,20 +134,19 @@ public class NamesrvStartup {
             throw new IllegalArgumentException("NamesrvController is null");
         }
 
+        // 1. 初始化 NamesrvController
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
 
-        Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-                controller.shutdown();
-                return null;
-            }
+        Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, (Callable<Void>) () -> {
+            controller.shutdown();
+            return null;
         }));
 
+        // 2. 启动 controller
         controller.start();
 
         return controller;
@@ -158,21 +154,5 @@ public class NamesrvStartup {
 
     public static void shutdown(final NamesrvController controller) {
         controller.shutdown();
-    }
-
-    public static Options buildCommandlineOptions(final Options options) {
-        Option opt = new Option("c", "configFile", true, "Name server config properties file");
-        opt.setRequired(false);
-        options.addOption(opt);
-
-        opt = new Option("p", "printConfigItem", false, "Print all config item");
-        opt.setRequired(false);
-        options.addOption(opt);
-
-        return options;
-    }
-
-    public static Properties getProperties() {
-        return properties;
     }
 }
